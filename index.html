@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="no">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Fredagens lille avstemning 🗳️</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+  <style>
+    :root{
+      --bg:#fff8f6; --card:#ffffff; --text:#403536; --muted:#8b7b7c;
+      --pink:#f29aa9; --pink2:#ffe3e7; --green:#9bbfa8; --green2:#e5f1e8;
+      --line:#f0dddd; --shadow:0 18px 55px rgba(100,70,75,.12);
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0; min-height:100vh; display:grid; place-items:center; padding:24px;
+      background:radial-gradient(circle at 20% 10%,#fff 0 15%,transparent 40%),var(--bg);
+      color:var(--text); font-family:"DM Sans",system-ui,sans-serif;
+    }
+    .wrap{width:min(460px,100%)}
+    .card{background:var(--card); border:1px solid var(--line); border-radius:30px; padding:30px 25px 26px; box-shadow:var(--shadow); text-align:center}
+    .emoji{font-size:38px; margin-bottom:6px}
+    h1{font-family:"Playfair Display",serif; font-size:30px; margin:0 0 10px}
+    .question{font-size:20px;font-weight:700;margin:0 0 10px}
+    .sub{color:var(--muted);font-size:14px;line-height:1.55;margin:0 auto 24px;max-width:330px}
+    .buttons{display:grid;gap:12px}
+    button{
+      width:100%; border:0; border-radius:18px; padding:17px 18px; font:700 16px "DM Sans",sans-serif;
+      cursor:pointer; transition:.18s transform,.18s filter; box-shadow:0 8px 20px rgba(70,50,55,.08)
+    }
+    button:hover{transform:translateY(-2px);filter:brightness(.99)}
+    button:active{transform:translateY(0)}
+    .yes{background:var(--pink2);color:#a14d5d}.no{background:var(--green2);color:#4f7659}
+    .result{display:none;border-radius:22px;padding:22px 18px;margin-top:16px;font-size:18px;font-weight:700;line-height:1.45}
+    .result.yes{background:var(--pink2);color:#a14d5d}.result.no{background:var(--green2);color:#4f7659}
+    .small{margin-top:18px;color:#aaa;font-size:12px}
+    .host{display:none;text-align:left}
+    .host .question{text-align:center}
+    .host-status{padding:18px;border-radius:20px;background:#fff9ef;border:1px solid #f4e6c9;margin:18px 0}
+    .host-status strong{display:block;font-size:22px;margin-top:4px}
+    .host-actions{display:grid;gap:10px}
+    .reset{background:#f5f1f1;color:#665a5c}
+    .copy{background:#f0edf9;color:#65528d}
+    .notice{font-size:13px;color:var(--muted);line-height:1.55}
+    .hidden{display:none!important}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <main class="card" id="voteCard">
+    <div class="emoji">🗳️</div>
+    <h1>Fredagens lille avstemning</h1>
+    <p class="question">Skal vi møtes i helgen? 👀</p>
+    <p class="sub">Ingen press — bare så vi vet hva helgen blir til 😊</p>
+    <div class="buttons" id="buttons">
+      <button class="yes" onclick="vote('yes')">❤️ JA — Vi møtes!</button>
+      <button class="no" onclick="vote('no')">🌿 NEI — Ikke denne helgen</button>
+    </div>
+    <div id="voteResult" class="result"></div>
+    <div class="small">Et lite fredagsspørsmål, så ingen trenger å gå og vente og lure. ❤️</div>
+  </main>
+
+  <main class="card host" id="hostCard">
+    <div class="emoji">🗳️</div>
+    <h1>Fredagens lille avstemning</h1>
+    <p class="question">Helgens resultat 👀</p>
+    <div class="host-status">
+      <div>Status</div>
+      <strong id="hostResult">Venter på stemmen …</strong>
+    </div>
+    <div class="host-actions">
+      <button class="reset" onclick="resetPoll()">↻ Start en ny avstemning</button>
+      <button class="copy" onclick="copyVoteLink()">🔗 Kopier stemmelinken</button>
+    </div>
+    <p class="notice">La denne siden være åpen på din PC/mobil. Den oppdateres automatisk når han stemmer.</p>
+  </main>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+/*
+  1) Create a Supabase project.
+  2) Paste the SQL from supabase-schema.sql into SQL Editor.
+  3) Put your Project URL and Publishable key below.
+*/
+const SUPABASE_URL = "https://mvdloykghtngnkzjilpk.supabase.co";
+const SUPABASE_KEY = "sb_publishable_Qfyk6AVY6DXBWlYrDKW13w_higgl6LP";
+
+const params = new URLSearchParams(location.search);
+const isHost = params.get("role") === "host";
+const pollId = params.get("poll") || "fredag";
+
+const voteCard = document.getElementById("voteCard");
+const hostCard = document.getElementById("hostCard");
+if (isHost) { voteCard.classList.add("hidden"); hostCard.style.display = "block"; }
+
+let client = null;
+if (!SUPABASE_URL.includes("PASTE_")) {
+  client = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+}
+
+function showVoteResult(kind){
+  const el = document.getElementById("voteResult");
+  el.className = "result " + (kind === "yes" ? "yes" : "no");
+  el.textContent = kind === "yes"
+    ? "Takk for stemmen! 🥰"
+    : "Takk for stemmen! 🌿";
+  el.style.display = "block";
+  document.getElementById("buttons").classList.add("hidden");
+}
+
+async function vote(kind){
+  if (!client) return alert("Supabase 설정이 아직 완료되지 않았어요.");
+  const { error } = await client
+    .from("weekend_votes")
+    .upsert({ poll_id: pollId, answer: kind, updated_at: new Date().toISOString() }, { onConflict: "poll_id" });
+  if (error) return alert("잠깐 문제가 생겼어요. 다시 눌러주세요.");
+  showVoteResult(kind);
+}
+
+async function loadResult(){
+  if (!client) {
+    document.getElementById("hostResult").textContent = "Supabase 설정이 필요해요.";
+    return;
+  }
+  const { data, error } = await client
+    .from("weekend_votes").select("answer").eq("poll_id", pollId).maybeSingle();
+  if (error) {
+    document.getElementById("hostResult").textContent = "연결을 확인해주세요.";
+    return;
+  }
+  const el = document.getElementById("hostResult");
+  if (!data) el.textContent = "아직 투표하지 않았어요 …";
+  else if (data.answer === "yes") el.textContent = "❤️ Han vil møte deg!";
+  else el.textContent = "🌿 Denne helgen blir det ikke noe møte.";
+}
+
+async function resetPoll(){
+  if (!client) return alert("Supabase 설정이 아직 완료되지 않았어요.");
+  const { error } = await client.from("weekend_votes").delete().eq("poll_id", pollId);
+  if (error) return alert("초기화에 실패했어요.");
+  document.getElementById("hostResult").textContent = "아직 투표하지 않았어요 …";
+}
+
+function copyVoteLink(){
+  const url = location.origin + location.pathname + "?poll=" + encodeURIComponent(pollId);
+  navigator.clipboard.writeText(url).then(()=>alert("Stemmelinken er kopiert! 🥰"));
+}
+
+if (isHost) {
+  loadResult();
+  setInterval(loadResult, 1500);
+}
+</script>
+</body>
+</html>

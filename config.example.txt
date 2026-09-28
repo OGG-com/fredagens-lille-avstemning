@@ -1,0 +1,5 @@
+// Not required if you paste values directly into index.html.
+// Kept here as a reminder of the two values you need.
+
+SUPABASE_URL=https://YOUR-PROJECT.supabase.co
+SUPABASE_PUBLISHABLE_KEY=YOUR-PUBLISHABLE-KEY
